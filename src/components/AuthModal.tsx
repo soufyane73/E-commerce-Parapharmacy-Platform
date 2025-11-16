@@ -7,8 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { User, Building2, Mail, Lock, Phone, MapPin, FileText } from "lucide-react";
-import { toast } from "sonner@2.0.3";
-import { validateCredentials } from "../data/users";
+import { toast } from "sonner";
+import { apiService } from "../services/api";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -57,7 +57,9 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
     pharmacyAddress: "",
   });
 
-  const handleLogin = (e: React.FormEvent) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!loginData.email || !loginData.password) {
@@ -65,37 +67,38 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
       return;
     }
 
-    // Validate credentials against mock users
-    const validatedUser = validateCredentials(loginData.email, loginData.password);
-    
-    if (!validatedUser) {
-      toast.error("Email ou mot de passe incorrect");
-      return;
+    setIsLoading(true);
+    try {
+      const response = await apiService.login(loginData.email, loginData.password);
+      
+      // Convert API user to our User type
+      const user: User = {
+        id: String(response.user.id),
+        email: response.user.email,
+        name: response.user.name,
+        type: response.user.type,
+        phone: response.user.phone,
+        address: response.user.address,
+        city: response.user.city,
+        companyName: response.user.company_name,
+        taxId: response.user.tax_id,
+        licenseNumber: response.user.license_number,
+      };
+
+      toast.success("Connexion réussie !");
+      onLogin(user);
+      onClose();
+      
+      // Reset form
+      setLoginData({ email: "", password: "" });
+    } catch (error: any) {
+      toast.error(error.message || "Email ou mot de passe incorrect");
+    } finally {
+      setIsLoading(false);
     }
-
-    // Convert to our User type (already compatible)
-    const user: User = {
-      id: validatedUser.id,
-      email: validatedUser.email,
-      name: validatedUser.name,
-      type: validatedUser.type,
-      phone: validatedUser.phone,
-      address: validatedUser.address,
-      city: validatedUser.city,
-      companyName: validatedUser.companyName,
-      taxId: validatedUser.taxId,
-      licenseNumber: validatedUser.licenseNumber,
-    };
-
-    toast.success("Connexion réussie !");
-    onLogin(user);
-    onClose();
-    
-    // Reset form
-    setLoginData({ email: "", password: "" });
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validation
@@ -121,27 +124,45 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
       return;
     }
 
-    // Simuler une inscription
-    const mockUser: User = {
-      id: "user-" + Date.now(),
-      email: registerData.email,
-      name: accountType === "b2c" 
-        ? `${registerData.firstName} ${registerData.lastName}`
-        : registerData.companyName,
-      type: accountType,
-      phone: registerData.phone,
-      address: accountType === "b2c" ? registerData.address : registerData.pharmacyAddress,
-      city: registerData.city,
-      ...(accountType === "b2b" && {
-        companyName: registerData.companyName,
-        taxId: registerData.taxId,
-        licenseNumber: registerData.licenseNumber,
-      }),
-    };
+    setIsLoading(true);
+    try {
+      const response = await apiService.register({
+        email: registerData.email,
+        password: registerData.password,
+        password_confirmation: registerData.confirmPassword,
+        firstName: registerData.firstName,
+        lastName: registerData.lastName,
+        phone: registerData.phone,
+        address: accountType === "b2c" ? registerData.address : registerData.pharmacyAddress,
+        city: registerData.city,
+        type: accountType,
+        companyName: accountType === "b2b" ? registerData.companyName : undefined,
+        taxId: accountType === "b2b" ? registerData.taxId : undefined,
+        licenseNumber: accountType === "b2b" ? registerData.licenseNumber : undefined,
+      });
 
-    toast.success("Inscription réussie ! Bienvenue sur PharmaPlus");
-    onLogin(mockUser);
-    onClose();
+      // Convert API user to our User type
+      const user: User = {
+        id: String(response.user.id),
+        email: response.user.email,
+        name: response.user.name,
+        type: response.user.type,
+        phone: response.user.phone,
+        address: response.user.address,
+        city: response.user.city,
+        companyName: response.user.company_name,
+        taxId: response.user.tax_id,
+        licenseNumber: response.user.license_number,
+      };
+
+      toast.success("Inscription réussie ! Bienvenue sur PharmaPlus");
+      onLogin(user);
+      onClose();
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de l'inscription");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -201,8 +222,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                 </a>
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Se connecter
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+                {isLoading ? "Connexion..." : "Se connecter"}
               </Button>
 
               {/* Demo credentials */}
@@ -489,8 +510,8 @@ export function AuthModal({ isOpen, onClose, onLogin }: AuthModalProps) {
                   </div>
                 )}
 
-                <Button type="submit" className="w-full" size="lg">
-                  Créer mon compte
+                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
+                  {isLoading ? "Inscription..." : "Créer mon compte"}
                 </Button>
               </form>
             </div>

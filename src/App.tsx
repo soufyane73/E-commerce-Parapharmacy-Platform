@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Header } from "./components/Header";
 import { CategoryNav } from "./components/CategoryNav";
 import { HeroSection } from "./components/HeroSection";
@@ -13,16 +13,16 @@ import { B2BDashboard } from "./components/B2BDashboard";
 import { FavoritesSheet } from "./components/FavoritesSheet";
 import { SettingsModal } from "./components/SettingsModal";
 import { Footer } from "./components/Footer";
-import { products, categories } from "./data/products";
 import { Product, CartItem } from "./types/product";
 import { toast, Toaster } from "sonner@2.0.3";
 import { Notification } from "./components/NotificationsMenu";
-import { initialNotifications } from "./data/notifications";
-import { NotificationGenerator } from "./utils/notificationHelpers";
+import { apiService } from "./services/api";
 
 type PageType = "home" | "contact" | "profile" | "dashboard";
 
 export default function App() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -37,107 +37,325 @@ export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [currentPage, setCurrentPage] = useState<PageType>("home");
   const [user, setUser] = useState<User | null>(null);
-  const [notifications, setNotifications] = useState<Notification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load initial data
+  useEffect(() => {
+    loadInitialData();
+    checkAuth();
+  }, []);
+
+  // Load cart and favorites when user logs in
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    } else {
+      setCartItems([]);
+      setFavorites([]);
+      setNotifications([]);
+    }
+  }, [user]);
+
+  const loadInitialData = async () => {
+    try {
+      setIsLoading(true);
+      // Load products
+      const productsResponse = await apiService.getProducts({ per_page: 100 });
+      const productsData = Array.isArray(productsResponse.data) 
+        ? productsResponse.data 
+        : productsResponse.data?.data || productsResponse;
+      
+      const formattedProducts: Product[] = productsData.map((p: any) => ({
+        id: String(p.id),
+        name: p.name,
+        description: p.description,
+        price: parseFloat(p.price),
+        originalPrice: p.original_price ? parseFloat(p.original_price) : undefined,
+        image: p.image,
+        category: p.category?.slug || p.category_id,
+        brand: p.brand,
+        rating: parseFloat(p.rating || 0),
+        reviews: p.reviews_count || 0,
+        inStock: p.in_stock,
+        tags: p.tags || [],
+      }));
+      setProducts(formattedProducts);
+
+      // Load categories
+      const categoriesResponse = await apiService.getCategories();
+      const categoriesData = categoriesResponse.categories || categoriesResponse.data || [];
+      setCategories(categoriesData);
+    } catch (error: any) {
+      console.error("Error loading data:", error);
+      toast.error("Erreur lors du chargement des données");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const checkAuth = async () => {
+    try {
+      if (apiService.getToken()) {
+        const response = await apiService.getProfile();
+        const apiUser = response.user;
+        const user: User = {
+          id: String(apiUser.id),
+          email: apiUser.email,
+          name: apiUser.name,
+          type: apiUser.type,
+          phone: apiUser.phone,
+          address: apiUser.address,
+          city: apiUser.city,
+          companyName: apiUser.company_name,
+          taxId: apiUser.tax_id,
+          licenseNumber: apiUser.license_number,
+        };
+        setUser(user);
+      }
+    } catch (error) {
+      // Token invalid or expired
+      apiService.setToken(null);
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      // Load cart
+      const cartResponse = await apiService.getCart();
+      const cartData = cartResponse.cartItems || [];
+      const formattedCart: CartItem[] = cartData.map((item: any) => ({
+        id: String(item.product.id),
+        name: item.product.name,
+        description: item.product.description,
+        price: parseFloat(item.product.price),
+        originalPrice: item.product.original_price ? parseFloat(item.product.original_price) : undefined,
+        image: item.product.image,
+        category: item.product.category?.slug || item.product.category_id,
+        brand: item.product.brand,
+        rating: parseFloat(item.product.rating || 0),
+        reviews: item.product.reviews_count || 0,
+        inStock: item.product.in_stock,
+        tags: item.product.tags || [],
+        quantity: item.quantity,
+      }));
+      setCartItems(formattedCart);
+
+      // Load favorites
+      const favoritesResponse = await apiService.getFavorites();
+      const favoritesData = favoritesResponse.favorites || [];
+      const formattedFavorites: Product[] = favoritesData.map((fav: any) => ({
+        id: String(fav.product.id),
+        name: fav.product.name,
+        description: fav.product.description,
+        price: parseFloat(fav.product.price),
+        originalPrice: fav.product.original_price ? parseFloat(fav.product.original_price) : undefined,
+        image: fav.product.image,
+        category: fav.product.category?.slug || fav.product.category_id,
+        brand: fav.product.brand,
+        rating: parseFloat(fav.product.rating || 0),
+        reviews: fav.product.reviews_count || 0,
+        inStock: fav.product.in_stock,
+        tags: fav.product.tags || [],
+      }));
+      setFavorites(formattedFavorites);
+
+      // Load notifications
+      const notificationsResponse = await apiService.getNotifications();
+      const notificationsData = notificationsResponse.data || notificationsResponse;
+      const formattedNotifications: Notification[] = notificationsData.map((notif: any) => ({
+        id: String(notif.id),
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        timestamp: new Date(notif.created_at),
+        isRead: notif.is_read,
+        icon: notif.icon,
+        actionLabel: notif.action_label,
+        actionType: notif.action_type,
+        actionData: notif.action_data,
+      }));
+      setNotifications(formattedNotifications);
+    } catch (error: any) {
+      console.error("Error loading user data:", error);
+    }
+  };
 
   // Filter products
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesCategory = !selectedCategory || product.category === selectedCategory;
-      const matchesSearch = !searchQuery || 
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      return matchesCategory && matchesSearch;
-    });
-  }, [selectedCategory, searchQuery]);
-
-  const handleAddToCart = (product: Product, quantity: number = 1) => {
-    setCartItems((prev) => {
-      const existingItem = prev.find((item) => item.id === product.id);
-      if (existingItem) {
-        toast.success(`Quantité mise à jour pour ${product.name}`);
-        return prev.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
+    let filtered = products;
+    
+    // Filter by category (can be slug or id)
+    if (selectedCategory) {
+      const category = categories.find(c => String(c.id) === selectedCategory || c.slug === selectedCategory);
+      if (category) {
+        filtered = filtered.filter(p => {
+          const productCategory = typeof p.category === 'string' ? p.category : String(p.category);
+          return productCategory === category.slug || productCategory === String(category.id);
+        });
       }
+    }
+    
+    // Filter by search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.name.toLowerCase().includes(query) ||
+        p.brand.toLowerCase().includes(query) ||
+        p.description.toLowerCase().includes(query)
+      );
+    }
+    
+    return filtered;
+  }, [products, selectedCategory, searchQuery, categories]);
+
+  const handleAddToCart = async (product: Product, quantity: number = 1) => {
+    if (!user) {
+      toast.error("Veuillez vous connecter pour ajouter au panier");
+      setIsAuthOpen(true);
+      return;
+    }
+
+    try {
+      await apiService.addToCart(product.id, quantity);
       toast.success(`${product.name} ajouté au panier`);
-      return [...prev, { ...product, quantity }];
-    });
+      // Reload cart
+      const cartResponse = await apiService.getCart();
+      const cartData = cartResponse.cartItems || [];
+      const formattedCart: CartItem[] = cartData.map((item: any) => ({
+        id: String(item.product.id),
+        name: item.product.name,
+        description: item.product.description,
+        price: parseFloat(item.product.price),
+        originalPrice: item.product.original_price ? parseFloat(item.product.original_price) : undefined,
+        image: item.product.image,
+        category: item.product.category?.slug || item.product.category_id,
+        brand: item.product.brand,
+        rating: parseFloat(item.product.rating || 0),
+        reviews: item.product.reviews_count || 0,
+        inStock: item.product.in_stock,
+        tags: item.product.tags || [],
+        quantity: item.quantity,
+      }));
+      setCartItems(formattedCart);
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de l'ajout au panier");
+    }
   };
 
-  const handleUpdateQuantity = (productId: string, quantity: number) => {
+  const handleUpdateQuantity = async (productId: string, quantity: number) => {
     if (quantity <= 0) {
       handleRemoveItem(productId);
       return;
     }
-    setCartItems((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
-    );
+
+    try {
+      const cartItem = cartItems.find(item => item.id === productId);
+      if (!cartItem) return;
+
+      // Find the cart item ID from API
+      const cartResponse = await apiService.getCart();
+      const cartData = cartResponse.cartItems || [];
+      const apiCartItem = cartData.find((item: any) => String(item.product.id) === productId);
+      
+      if (apiCartItem) {
+        await apiService.updateCartItem(String(apiCartItem.id), quantity);
+        // Reload cart
+        await loadUserData();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la mise à jour");
+    }
   };
 
-  const handleRemoveItem = (productId: string) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== productId));
-    toast.info("Produit retiré du panier");
+  const handleRemoveItem = async (productId: string) => {
+    try {
+      const cartResponse = await apiService.getCart();
+      const cartData = cartResponse.cartItems || [];
+      const apiCartItem = cartData.find((item: any) => String(item.product.id) === productId);
+      
+      if (apiCartItem) {
+        await apiService.removeFromCart(String(apiCartItem.id));
+        toast.info("Produit retiré du panier");
+        // Reload cart
+        await loadUserData();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la suppression");
+    }
   };
 
-  const handleOrderComplete = () => {
-    // Générer un numéro de commande
-    const orderId = `CMD${Date.now().toString().slice(-6)}`;
-    
-    // Ajouter une notification de nouvelle commande
-    const orderNotification = NotificationGenerator.newOrder(orderId);
-    setNotifications((prev) => [orderNotification, ...prev]);
-    
-    // Simuler une notification de commande expédiée après 5 secondes
-    setTimeout(() => {
-      const shippedNotification = NotificationGenerator.orderShipped(orderId);
-      setNotifications((prev) => [shippedNotification, ...prev]);
-      toast.success("Votre commande a été expédiée !");
-    }, 5000);
-    
-    setCartItems([]);
-    setCurrentPage("home");
+  const handleOrderComplete = async (orderData: any) => {
+    try {
+      const response = await apiService.createOrder(orderData);
+      toast.success(`Commande créée avec succès ! Numéro: ${response.order.order_number}`);
+      
+      // Reload cart (should be empty now)
+      await loadUserData();
+      
+      setCurrentPage("home");
+      setIsCheckoutOpen(false);
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la création de la commande");
+    }
   };
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
     toast.success(`Bienvenue ${loggedInUser.name} !`);
-    
-    // Ajouter une notification de bienvenue avec points de fidélité
-    setTimeout(() => {
-      const loyaltyNotification = NotificationGenerator.loyaltyPoints(150);
-      setNotifications((prev) => [loyaltyNotification, ...prev]);
-    }, 2000);
+    // loadUserData will be called by useEffect when user changes
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await apiService.logout();
+    } catch (error) {
+      // Ignore logout errors
+    }
     setUser(null);
     setCurrentPage("home");
     setFavorites([]);
+    setCartItems([]);
+    setNotifications([]);
     toast.info("Vous êtes déconnecté");
   };
 
-  const handleToggleFavorite = (product: Product) => {
-    setFavorites((prev) => {
-      const exists = prev.find((item) => item.id === product.id);
-      if (exists) {
-        toast.info(`${product.name} retiré des favoris`);
-        return prev.filter((item) => item.id !== product.id);
-      } else {
+  const handleToggleFavorite = async (product: Product) => {
+    if (!user) {
+      toast.error("Veuillez vous connecter pour ajouter aux favoris");
+      setIsAuthOpen(true);
+      return;
+    }
+
+    try {
+      const response = await apiService.toggleFavorite(product.id);
+      if (response.isFavorite) {
         toast.success(`${product.name} ajouté aux favoris`);
-        return [...prev, product];
+      } else {
+        toast.info(`${product.name} retiré des favoris`);
       }
-    });
+      // Reload favorites
+      await loadUserData();
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la modification des favoris");
+    }
   };
 
-  const handleRemoveFavorite = (productId: string) => {
-    setFavorites((prev) => prev.filter((item) => item.id !== productId));
-    toast.info("Produit retiré des favoris");
+  const handleRemoveFavorite = async (productId: string) => {
+    try {
+      const favoritesResponse = await apiService.getFavorites();
+      const favoritesData = favoritesResponse.favorites || [];
+      const favorite = favoritesData.find((fav: any) => String(fav.product.id) === productId);
+      
+      if (favorite) {
+        await apiService.removeFavorite(String(favorite.id));
+        toast.info("Produit retiré des favoris");
+        // Reload favorites
+        await loadUserData();
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erreur lors de la suppression");
+    }
   };
 
   const isFavorite = (productId: string) => {
@@ -163,22 +381,37 @@ export default function App() {
   };
 
   // Notification handlers
-  const handleMarkNotificationAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((notif) =>
-        notif.id === id ? { ...notif, isRead: true } : notif
-      )
-    );
+  const handleMarkNotificationAsRead = async (id: string) => {
+    try {
+      await apiService.markAsRead(id);
+      setNotifications((prev) =>
+        prev.map((notif) =>
+          notif.id === id ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (error: any) {
+      toast.error(error.message || "Erreur");
+    }
   };
 
-  const handleMarkAllNotificationsAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((notif) => ({ ...notif, isRead: true }))
-    );
+  const handleMarkAllNotificationsAsRead = async () => {
+    try {
+      await apiService.markAllAsRead();
+      setNotifications((prev) =>
+        prev.map((notif) => ({ ...notif, isRead: true }))
+      );
+    } catch (error: any) {
+      toast.error(error.message || "Erreur");
+    }
   };
 
-  const handleRemoveNotification = (id: string) => {
-    setNotifications((prev) => prev.filter((notif) => notif.id !== id));
+  const handleRemoveNotification = async (id: string) => {
+    try {
+      await apiService.deleteNotification(id);
+      setNotifications((prev) => prev.filter((notif) => notif.id !== id));
+    } catch (error: any) {
+      toast.error(error.message || "Erreur");
+    }
   };
 
   const handleNotificationAction = (notification: Notification) => {
@@ -202,7 +435,7 @@ export default function App() {
       case "view_product":
         const productId = notification.actionData?.productId;
         if (productId) {
-          const product = products.find((p) => p.id === productId);
+          const product = products.find((p) => p.id === String(productId));
           if (product) {
             setSelectedProduct(product);
             toast.success("Affichage du produit !");
@@ -247,10 +480,21 @@ export default function App() {
         onSettings={() => setIsSettingsOpen(true)}
       />
 
-      {currentPage === "home" ? (
+      {isLoading && currentPage === "home" ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Chargement des produits...</p>
+          </div>
+        </div>
+      ) : currentPage === "home" ? (
         <>
           <CategoryNav
-            categories={categories}
+            categories={categories.map(cat => ({
+              id: String(cat.id),
+              name: cat.name,
+              icon: cat.icon || "Package",
+            }))}
             selectedCategory={selectedCategory}
             onCategorySelect={setSelectedCategory}
           />
@@ -343,6 +587,7 @@ export default function App() {
         cartItems={cartItems}
         total={cartTotal}
         onOrderComplete={handleOrderComplete}
+        user={user}
       />
 
       <ProductModal

@@ -9,29 +9,30 @@ import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { Card, CardContent } from "./ui/card";
 import { Separator } from "./ui/separator";
 import { CartItem } from "../types/product";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface CheckoutModalProps {
   isOpen: boolean;
   onClose: () => void;
   cartItems: CartItem[];
   total: number;
-  onOrderComplete: () => void;
+  onOrderComplete: (orderData: any) => void;
+  user?: any;
 }
 
 type Step = "info" | "shipping" | "payment" | "confirmation";
 
-export function CheckoutModal({ isOpen, onClose, cartItems, total, onOrderComplete }: CheckoutModalProps) {
+export function CheckoutModal({ isOpen, onClose, cartItems, total, onOrderComplete, user }: CheckoutModalProps) {
   const [currentStep, setCurrentStep] = useState<Step>("info");
   const [orderNumber, setOrderNumber] = useState("");
   
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    address: "",
-    city: "",
+    firstName: user?.name?.split(' ')[0] || "",
+    lastName: user?.name?.split(' ').slice(1).join(' ') || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    address: user?.address || "",
+    city: user?.city || "",
     postalCode: "",
     notes: "",
   });
@@ -71,26 +72,34 @@ export function CheckoutModal({ isOpen, onClose, cartItems, total, onOrderComple
   };
 
   const handleSubmitOrder = () => {
-    // Générer un numéro de commande
-    const orderNum = `MA${Date.now().toString().slice(-8)}`;
-    setOrderNumber(orderNum);
-    setCurrentStep("confirmation");
+    const orderData = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      address: formData.address,
+      city: formData.city,
+      postalCode: formData.postalCode,
+      notes: formData.notes,
+      shippingMethod: shippingMethod,
+      paymentMethod: paymentMethod,
+    };
     
-    toast.success("Commande validée avec succès !");
+    onOrderComplete(orderData);
+    setCurrentStep("confirmation");
   };
 
   const handleFinish = () => {
-    onOrderComplete();
     onClose();
     // Reset form
     setCurrentStep("info");
     setFormData({
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      address: "",
-      city: "",
+      firstName: user?.name?.split(' ')[0] || "",
+      lastName: user?.name?.split(' ').slice(1).join(' ') || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
+      address: user?.address || "",
+      city: user?.city || "",
       postalCode: "",
       notes: "",
     });
