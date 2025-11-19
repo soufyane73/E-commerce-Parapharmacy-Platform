@@ -4,7 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
-return Application::configure(basePath: dirname(__DIR__))
+return $app=Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -13,9 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'jwt.auth' => \App\Http\Middleware\JwtAuth::class,
+            'auth:api' => \App\Http\Middleware\JwtAuth::class,
         ]);
-        
+
         // Désactiver CSRF pour les routes API
         $middleware->validateCsrfTokens(except: [
             'api/*',
@@ -27,7 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*') || $request->expectsJson()) {
                 $allowedMethods = $e->getHeaders()['Allow'] ?? [];
                 $allowedMethodsString = is_array($allowedMethods) ? implode(', ', $allowedMethods) : $allowedMethods;
-                
+
                 return response()->json([
                     'error' => 'Méthode HTTP non autorisée',
                     'message' => 'Cette route ne supporte pas la méthode ' . $request->method() . '. Méthodes supportées: ' . $allowedMethodsString,
@@ -45,3 +45,4 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
     })->create();
+return $app;

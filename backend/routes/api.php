@@ -21,7 +21,7 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 
 // Protected routes (require authentication)
-Route::middleware('jwt.auth')->group(function () {
+Route::middleware('auth:api')->group(function () {
     // Auth routes
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/logout', [AuthController::class, 'logout']);
