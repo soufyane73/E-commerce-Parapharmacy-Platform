@@ -33,8 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
                     'error' => 'Méthode HTTP non autorisée',
                     'message' => 'Cette route ne supporte pas la méthode ' . $request->method() . '. Méthodes supportées: ' . $allowedMethodsString,
                 ], 405);
-            return;
             }
+            return;
         });
 
         // Handle NotFoundHttpException for API routes
