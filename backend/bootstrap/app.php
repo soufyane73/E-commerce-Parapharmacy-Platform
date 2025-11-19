@@ -4,7 +4,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
-return $app=Application::configure(basePath: dirname(__DIR__))
+return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
@@ -20,6 +20,7 @@ return $app=Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);
+        return;
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Handle MethodNotAllowedHttpException for API routes
@@ -44,5 +45,6 @@ return $app=Application::configure(basePath: dirname(__DIR__))
                 ], 404);
             }
         });
+        return;
     })->create();
-return $app;
+
