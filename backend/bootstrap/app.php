@@ -34,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'Cette route ne supporte pas la méthode ' . $request->method() . '. Méthodes supportées: ' . $allowedMethodsString,
                 ], 405);
             }
+            return;
         });
 
         // Handle NotFoundHttpException for API routes
@@ -44,6 +45,7 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'La route demandée n\'existe pas',
                 ], 404);
             }
+            return;
         });
         return;
     })->create();
